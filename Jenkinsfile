@@ -1,35 +1,46 @@
 pipeline {
-    agent any 
-    
-    stages{
-        stage("Clone Code"){
+    agent any
+
+    stages {
+        stage("Clone Code") {
             steps {
                 echo "Cloning the code"
-                git url:"https://github.com/LondheShubham153/django-notes-app.git", branch: "main"
+                git url: "https://github.com/LondheShubham153/django-notes-app", branch: "main"
             }
         }
-        stage("Build"){
+
+        stage('Build Docker Image') {
             steps {
-                echo "Building the image"
-                sh "docker build -t my-note-app ."
-            }
-        }
-        stage("Push to Docker Hub"){
-            steps {
-                echo "Pushing the image to docker hub"
-                withCredentials([usernamePassword(credentialsId:"dockerHub",passwordVariable:"dockerHubPass",usernameVariable:"dockerHubUser")]){
-                sh "docker tag my-note-app ${env.dockerHubUser}/my-note-app:latest"
-                sh "docker login -u ${env.dockerHubUser} -p ${env.dockerHubPass}"
-                sh "docker push ${env.dockerHubUser}/my-note-app:latest"
+                script {
+                    def dockerImage = docker.build('my-django-app:latest', '-f Dockerfile .')
                 }
             }
         }
-        stage("Deploy"){
+
+        stage("Test") {
+            agent {
+                docker {
+                    image "my-django-app:latest"
+                }
+            }
             steps {
-                echo "Deploying the container"
-                sh "docker-compose down && docker-compose up -d"
-                
+                script {
+                    // Check if we are able to run scripts inside docker container, various unit and integration test can follow
+                    sh "python3 --version"
+                    sh "cd /app/backend"
+                    
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                // Remove the Docker image on successful build
+                sh 'docker rmi my-django-app:latest'
             }
         }
     }
 }
+
